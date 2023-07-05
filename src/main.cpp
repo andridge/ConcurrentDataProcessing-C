@@ -37,6 +37,32 @@ private:
     bool& mIsRunning;
 };
 
+class Concatenator {
+public:
+    Concatenator(std::condition_variable& wakeCondition, std::mutex& mutex, bool& mIsRunning)
+        : wakeCondition(wakeCondition), mutex(mutex), mIsRunning(mIsRunning) {}
+
+    void concatenateWords() {
+        std::unique_lock<std::mutex> lock(mutex); // Lock the mutex
+
+        // Wait until the mIsRunning flag is true
+        wakeCondition.wait(lock, [&]() { return mIsRunning; });
+
+        std::string word1 = "egg";
+        std::string word2 = "plant";
+        std::string result = word1 + " " + word2;
+        std::cout << "Concatenated Words: " << result << std::endl;
+
+        // Notify the main thread to proceed
+        wakeCondition.notify_one();
+    }
+
+private:
+    std::condition_variable& wakeCondition;
+    std::mutex& mutex;
+    bool& mIsRunning;
+};
+
 int main() {
     std::vector<Node*> mNodes;
 
@@ -47,11 +73,14 @@ int main() {
 
     // Populate mNodes with some nodes
     Node node1(wakeCondition, mutex, mIsRunning);
-    Node node2(wakeCondition, mutex, mIsRunning);
-    Node node3(wakeCondition, mutex, mIsRunning);
+    //Node node2(wakeCondition, mutex, mIsRunning);
+   // Node node3(wakeCondition, mutex, mIsRunning);
     mNodes.push_back(&node1);
-    mNodes.push_back(&node2);
-    mNodes.push_back(&node3);
+   // mNodes.push_back(&node2);
+   // mNodes.push_back(&node3);
+
+    // Create a Concatenator object
+    Concatenator concatenator(wakeCondition, mutex, mIsRunning);
 
     // TO MAKE PARALLEL
     std::vector<std::thread> threads;
@@ -62,6 +91,11 @@ int main() {
             p->startProcessing();
         });
     }
+
+    // Create and start a thread for the Concatenator
+    threads.emplace_back([&]() {
+        concatenator.concatenateWords();
+    });
 
     // Notify the threads to start processing
     {
