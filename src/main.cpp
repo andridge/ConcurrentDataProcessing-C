@@ -8,8 +8,8 @@
 
 class Node {
 public:
-    Node(std::condition_variable& wakeCondition, std::mutex& mutex, bool& isRunning)
-        : wakeCondition(wakeCondition), mutex(mutex), isRunning(isRunning) {
+    Node(std::condition_variable& wakeCondition, std::mutex& mutex, bool& mIsRunning)
+        : wakeCondition(wakeCondition), mutex(mutex), mIsRunning(mIsRunning) {
         // Define mathematical operations for this Node
         mathFunctions.push_back([]() { return 1 + 1; });
         mathFunctions.push_back([]() { return 1 + 2; });
@@ -20,8 +20,8 @@ public:
         for (const auto& mathFunc : mathFunctions) {
             std::unique_lock<std::mutex> lock(mutex); // Lock the mutex
 
-            // Wait until the isRunning flag is true
-            wakeCondition.wait(lock, [&]() { return isRunning; });
+            // Wait until the mIsRunning flag is true
+            wakeCondition.wait(lock, [&]() { return mIsRunning; });
 
             std::cout << "Result: " << mathFunc() << std::endl;
 
@@ -34,7 +34,7 @@ private:
     std::vector<std::function<int()>> mathFunctions;
     std::condition_variable& wakeCondition;
     std::mutex& mutex;
-    bool& isRunning;
+    bool& mIsRunning;
 };
 
 int main() {
