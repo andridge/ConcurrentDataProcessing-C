@@ -3,10 +3,13 @@
 #include <vector>
 #include <functional>
 #include <memory>
+#include <mutex>
+#include <condition_variable>
 
 class Node {
 public:
-    Node() {
+    Node(std::condition_variable& wakeCondition, std::mutex& mutex, bool& isRunning)
+        : wakeCondition(wakeCondition), mutex(mutex), isRunning(isRunning) {
         // Define mathematical operations for this Node
         mathFunctions.push_back([]() { return 1 + 1; });
         mathFunctions.push_back([]() { return 1 + 2; });
@@ -15,32 +18,43 @@ public:
 
     void startProcessing() {
         for (const auto& mathFunc : mathFunctions) {
+            std::unique_lock<std::mutex> lock(mutex); // Lock the mutex
+
+            // Wait until the isRunning flag is true
+            wakeCondition.wait(lock, [&]() { return isRunning; });
+
             std::cout << "Result: " << mathFunc() << std::endl;
+
+            // Notify the main thread to proceed
+            wakeCondition.notify_one();
         }
     }
 
 private:
     std::vector<std::function<int()>> mathFunctions;
+    std::condition_variable& wakeCondition;
+    std::mutex& mutex;
+    bool& isRunning;
 };
 
 int main() {
     std::vector<Node*> mNodes;
 
+    // Create a condition variable, mutex, and flag for synchronization
+    std::condition_variable wakeCondition;
+    std::mutex mutex;
+    bool mIsRunning = false;
+
     // Populate mNodes with some nodes
-    Node node1;
-    Node node2;
-    Node node3;
+    Node node1(wakeCondition, mutex, mIsRunning);
+    Node node2(wakeCondition, mutex, mIsRunning);
+    Node node3(wakeCondition, mutex, mIsRunning);
     mNodes.push_back(&node1);
     mNodes.push_back(&node2);
     mNodes.push_back(&node3);
 
-    bool mIsRunning = true;
-    std::unique_ptr<bool> mThread(new bool(false)); // Declaration of mThread
-
-    
-// TO MAKE PARALLEL
-    /*
-     std::vector<std::thread> threads;
+    // TO MAKE PARALLEL
+    std::vector<std::thread> threads;
 
     // Create and start a thread for each Node
     for (auto p : mNodes) {
@@ -49,24 +63,17 @@ int main() {
         });
     }
 
-    // Join all the threads to wait for their completion
+    // Notify the threads to start processing
+    {
+        std::unique_lock<std::mutex> lock(mutex);
+        mIsRunning = true;
+        wakeCondition.notify_all();
+    }
+
+    // Wait for all the threads to finish
     for (auto& thread : threads) {
         thread.join();
     }
-    */
-   /*
-   The order of execution and the interleaving of threads can introduce non-determinism, which means that the order in which the results are printed may vary between runs. The parallel execution may lead to different threads executing at different speeds and potentially overlapping their output.
-   If you require a specific order of results, you would need to introduce synchronization mechanisms or use parallel patterns such as barriers or mutexes to control the execution and ensure the desired order. However, keep in mind that introducing synchronization may limit the benefits of parallelism and potentially impact performance.
-   */
-    // TODO: CREATE WAKE CONDITION AND A CALLBACK TO INLETS
-    
-    // WHEN CODE NEEDS WAKING UP
-
-    for (auto p : mNodes) {
-        p->startProcessing();
-    }
-
-    mIsRunning = true;
 
     return 0;
 }
